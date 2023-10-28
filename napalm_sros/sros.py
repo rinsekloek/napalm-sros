@@ -41,6 +41,7 @@ from napalm.base.exceptions import (
     SessionLockedException,
     MergeConfigException,
     ReplaceConfigException,
+    CommitError,
 )
 from napalm.base.helpers import convert, ip, as_number
 import napalm.base.constants as C
@@ -344,15 +345,19 @@ class NokiaSROSDriver(NetworkDriver):
             buff = self._perform_cli_commands(["commit"], True)
             # If error while performing commit, return the error
             error = ""
+            logging.debug(f"Result of cli commit: {buff}")
             for item in buff.split("\n"):
-                if self.cmd_line_pattern_re.search(item):
-                    continue
                 if any(match.search(item) for match in self.terminal_stderr_re):
+                    logging.debug(f"Match error item: {item}")
                     row = item.strip()
                     row_list = row.split(": ")
                     error += row_list[2]
+                if self.cmd_line_pattern_re.search(item):
+                    logging.debug(f"cmd_line_pattern found in {item}")
+                    continue
             if error:
                 print("Error while commit: ", error)
+                raise CommitError("Commit error: %s", error)
         elif self.fmt == "xml":
             self.conn.commit()
             if not self.lock_disable and not self.session_config_lock:
